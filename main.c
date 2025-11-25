@@ -62,8 +62,34 @@ void mark(Object* object) {
         mark(object->tail);
     }
 }
+void sweep (){
+    Object** object = &vm.firstObject;
+    while(*object){
+        if(!(*object)->marked){
+            Object* unreached = *object;
 
-int main(){
-    // Main function implementation
-    return 0;
+            *object = unreached->next;
+            free(unreached);
+            vm.numObjects--;
+        } else {
+            (*object)->marked = 0;
+            object = &(*object)->next;
+        }
+    }
 }
+
+void gc(){
+    int numObjectsBefore = vm.numObjects;
+
+    MarkAll();
+    sweep();
+
+   if(vm.numObjects == 0){
+        vm.maxObjects = INITIAL_GC_THRESHOLD;
+   } else {
+        vm.maxObjects = vm.numObjects * 2;
+   }
+   printf("Collected %d objects, %d remaining.\n", numObjectsBefore - vm.numObjects, vm.numObjects);
+}
+
+Object* 
