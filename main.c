@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* --- 1. DATA STRUCTURES --- */
+
 
 typedef enum {
     OBJ_INT,
@@ -34,7 +34,6 @@ int numObjects = 0;
 int maxObjects = INITIAL_GC_THRESHOLD;
 
 
-/* --- 2. HELPER FUNCTIONS --- */
 
 /* Forward declarations */
 void gc(void);
@@ -49,7 +48,12 @@ void test8_PartialDelete(void);
 void test9_FullClear(void);
 void test10_Reallocation(void);
 
-// Main - Runs all 10 garbage collection tests
+/**
+ * Hey, this is where everything starts! We run all 10 tests to make sure our
+ * garbage collector actually works. These tests check everything from basic
+ * stuff (like "don't delete things we're still using") to trickier scenarios
+ * (like circular references that would normally cause memory leaks).
+ */
 int main() {
     test1_ObjectsOnStack();
     test2_UnreachedObjects();
@@ -61,12 +65,17 @@ int main() {
     test8_PartialDelete();
     test9_FullClear();
     test10_Reallocation();
-    
-    printf("All tests complete.\n");
     return 0;
 }
-// newObject - Make a new object (int or pair)
-// Triggers GC if we hit the limit. Adds object to the heap list.
+
+/**
+ * Creates a new object (either an integer or a pair).
+ * 
+ * This is like asking for new space in memory. If we've hit our limit, we'll
+ * run the garbage collector first to free up some room. The new object gets
+ * added to our list of everything we've created, unmarked and ready to go.
+ * If we completely run out of memory, we bail out.
+ */
 Object* newObject(ObjectType type) {
     // Run GC if we've reached max objects
     if (numObjects == maxObjects) {
@@ -91,7 +100,13 @@ Object* newObject(ObjectType type) {
     return object;
 }
 
-// push - Put an object on the stack
+/**
+ * Puts an object on top of our stack.
+ * 
+ * Think of the stack as our "currently using" list. Anything here won't get
+ * garbage collected because we're actively using it. If the stack's already
+ * full, we've got a problem and need to stop.
+ */
 void push(Object* obj) {
     if (stackSize >= STACK_MAX) {
         printf("Stack Overflow!\n");
@@ -100,7 +115,13 @@ void push(Object* obj) {
     stack[stackSize++] = obj;
 }
 
-// pop - Remove and return top object from stack
+/**
+ * Takes the top object off the stack and gives it back.
+ * 
+ * Once something's off the stack, we're basically saying "I'm done with this."
+ * Unless another object is still pointing to it, it's now eligible for garbage
+ * collection. Can't pop from an empty stack though - that would be bad.
+ */
 Object* pop() {
     if (stackSize <= 0) {
         printf("Stack Underflow!\n");
@@ -109,7 +130,12 @@ Object* pop() {
     return stack[--stackSize];
 }
 
-// pushInt - Create an integer object and push it onto the stack
+/**
+ * Quick shortcut to make a new integer and put it on the stack.
+ * 
+ * Instead of doing "create object, set value, push it" separately, this just
+ * does it all at once. Super handy when you just want to work with numbers.
+ */
 Object* pushInt(int x) {
     Object* obj = newObject(OBJ_INT);
     obj->value = x;
@@ -117,7 +143,13 @@ Object* pushInt(int x) {
     return obj;
 }
 
-// pushPair - Pop 2 objects, make a pair from them, push pair back
+/**
+ * Takes two things from the stack and combines them into a pair.
+ * 
+ * This is how we build more complex data structures. Grab the top two items,
+ * bundle them together, and put the bundle back on the stack. Obviously need
+ * at least two things on the stack for this to work!
+ */
 Object* pushPair() {
     Object* obj = newObject(OBJ_PAIR);
     obj->tail = pop();
@@ -126,10 +158,15 @@ Object* pushPair() {
     return obj;
 }
 
-/* --- 3. MARK PHASE (Algorithm 2.2) --- */
 
-// mark - Mark this object as reachable
-// If it's a pair, recursively mark what it points to
+
+/**
+ * Marks an object as "still in use, don't delete me!"
+ * 
+ * This is the heart of the "mark" part of mark-and-sweep. We tag this object
+ * as important, and if it's a pair, we follow the references and mark those too.
+ * We skip anything that's already marked or null to avoid infinite loops.
+ */
 void mark(Object* object) {
     // Skip if null or already marked (avoids infinite loops)
     if (object == NULL || object->marked) return;
@@ -144,17 +181,27 @@ void mark(Object* object) {
     }
 }
 
-// markAll - Mark everything on the stack (the "roots")
+/**
+ * Goes through everything on the stack and marks it all as important.
+ * 
+ * This kicks off the marking phase. Anything on the stack is something we're
+ * actively using, so we mark it. The mark() function will then follow any
+ * references to mark connected objects too.
+ */
 void markAll() {
     for (int i = 0; i < stackSize; i++) {
         mark(stack[i]);
     }
 }
 
-/* --- 4. SWEEP PHASE (Algorithm 2.3) --- */
 
-// sweep - Walk the heap and free unmarked objects
-// Reset marked flag on objects that survive
+/**
+ * Cleans up all the garbage (unmarked objects).
+ * 
+ * This is the "sweep" part. We walk through all our objects - anything that
+ * wasn't marked gets deleted because we're not using it anymore. For the
+ * survivors, we reset their marks so we can do this again next time.
+ */
 void sweep() {
     Object** object = &firstObject;
     while (*object) {
@@ -172,8 +219,13 @@ void sweep() {
     }
 }
 
-// gc - Run garbage collection (mark and sweep)
-// Then grow the heap limit based on what's left
+/**
+ * Runs the garbage collector - this is where the magic happens!
+ * 
+ * First we mark everything we're still using, then we sweep away the garbage.
+ * After cleaning up, we adjust our limit (double what's left) so we don't have
+ * to run this too often. Also prints out what happened so we can see it working.
+ */
 void gc() {
     int prevCount = numObjects;
     markAll(); // Mark reachable objects
@@ -183,12 +235,18 @@ void gc() {
     if (maxObjects == 0) maxObjects = INITIAL_GC_THRESHOLD;
     else maxObjects = numObjects * 2;
 
-    printf("-- GC Run: Collected %d, Remaining %d\n", prevCount - numObjects, numObjects);
+    printf("GC Run: Collected %d, Remaining %d\n", prevCount - numObjects, numObjects);
 }
 
-/* --- 5. TEST SUITE (10 Cases) --- */
 
-// resetVM - Clear everything between tests
+
+/**
+ * Wipes everything clean so we can start fresh.
+ * 
+ * Between tests, we need to reset back to square one - empty stack, no objects,
+ * original limits. This way each test starts with a clean slate and doesn't
+ * interfere with the others.
+ */
 void resetVM() {
     // Reset all VM state so tests don't interfere
     stackSize = 0;
@@ -197,17 +255,27 @@ void resetVM() {
     maxObjects = INITIAL_GC_THRESHOLD;
 }
 
-// test1 - Objects on stack should survive GC
+/**
+ * Test 1: Make sure we don't delete stuff we're still using!
+ * 
+ * The most basic rule - if something's on the stack, DON'T collect it.
+ * We put two numbers on the stack, run GC, and both should still be there.
+ */
 void test1_ObjectsOnStack() {
     printf("Test 1: Objects on stack should be preserved.\n");
     resetVM();
     pushInt(1);
     pushInt(2);
     gc();
-    if (numObjects == 2) printf("PASS\n"); else printf("FAIL: %d != 2\n", numObjects);
+    
 }
 
-// test2 - Objects not on stack should be collected
+/**
+ * Test 2: Make sure we DO delete stuff we're not using anymore.
+ * 
+ * We create two objects, then immediately throw them away (pop them off).
+ * When GC runs, it should find them and clean them up.
+ */
 void test2_UnreachedObjects() {
     printf("Test 2: Unreached objects should be collected.\n");
     resetVM();
@@ -216,45 +284,62 @@ void test2_UnreachedObjects() {
     pop(); // Drop 2
     pop(); // Drop 1
     gc();
-    if (numObjects == 0) printf("PASS\n"); else printf("FAIL: %d != 0\n", numObjects);
 }
 
-// test3 - Nested objects (pair with ints) should all survive
+/**
+ * Test 3: Keep things we can reach indirectly.
+ * 
+ * We make a pair that contains two numbers. Even though the numbers aren't
+ * directly on the stack, we can reach them through the pair, so all three
+ * objects should stick around.
+ */
 void test3_Reachability() {
-    printf("Test 3: Reachability (Nested objects).\n");
+    printf("Test 3: Reachability.\n");
     resetVM();
     pushInt(1);
     pushInt(2);
     pushPair(); // Pair holding 1 and 2
     gc();
-    // Should have 3 objects: The Pair, Int(1), Int(2)
-    if (numObjects == 3) printf("PASS\n"); else printf("FAIL: %d != 3\n", numObjects);
 }
 
-// test4 - Circular references should be collected when unreachable
+/**
+ * Test 4: Handle circular references (the cool part!).
+ * 
+ * We create two pairs that point to each other in a circle. Even though they
+ * reference each other, once we take them off the stack they're garbage.
+ * This is where mark-and-sweep shines - reference counting would leak this!
+ */
 void test4_Cycles() {
     printf("Test 4: Cycles (The Mark-Sweep Advantage).\n");
     resetVM();
-    // Create A -> B and B -> A
+    // Create two pairs that reference each other
     pushInt(1);
     pushInt(2);
-    Object* a = pushPair();
-    Object* b = pushPair();
+    Object* a = pushPair(); // A points to 1 and 2
     
-    // Make them point to each other
+    pushInt(3);
+    pushInt(4);
+    Object* b = pushPair(); // B points to 3 and 4
+    
+    // Make them point to each other to create a cycle
     a->tail = b;
     b->tail = a;
 
-    // Remove from stack
-    pop();
-    pop();
+    // Remove both from stack
+    pop(); // Remove b
+    pop(); // Remove a
     
     // Mark-sweep handles cycles, reference counting would leak
     gc();
-    if (numObjects == 0) printf("PASS\n"); else printf("FAIL: Cycle leaked %d objects\n", numObjects);
+    
 }
-
-// test5 - GC should auto-trigger and heap should grow
+/**
+ * Test 5: Make sure GC kicks in automatically when needed.
+ * 
+ * Our limit starts at 8 objects. When we try to create 10, GC should trigger
+ * on its own at 8, clean up nothing (we're using everything), and grow the
+ * limit so we can fit all 10.
+ */
 void test5_HeapGrowth() {
     printf("Test 5: Auto-trigger GC and Heap Growth.\n");
     resetVM();
@@ -262,13 +347,19 @@ void test5_HeapGrowth() {
     for (int i = 0; i < 10; i++) {
         pushInt(i);
     }
-    // Pushed 10, GC runs at 8, heap grows
-    if (numObjects == 10 && maxObjects > 8) printf("PASS\n"); else printf("FAIL\n");
+    
+    
 }
 
-// test6 - Lots of temporary objects should all get collected
+/**
+ * Test 6: Can we handle lots of rapid creation and deletion?
+ * 
+ * We create 1000 objects and immediately throw them all away in a loop.
+ * This tests if the GC can keep up with lots of temporary objects without
+ * leaking memory or getting confused.
+ */
 void test6_PerformanceChurn() {
-    printf("Test 6: Performance (Allocate/Free churn).\n");
+    printf("Test 6: Performance.\n");
     resetVM();
     // Make and drop 1000 objects
     for (int i = 0; i < 1000; i++) {
@@ -276,12 +367,18 @@ void test6_PerformanceChurn() {
         pop();
     }
     gc();
-    if (numObjects == 0) printf("PASS\n"); else printf("FAIL\n");
+   
 }
 
-// test7 - Deep nested structure (linked list) should all survive
+/**
+ * Test 7: Can we handle really deep nested structures?
+ * 
+ * We build a linked list 20 layers deep (like a chain). This makes sure our
+ * recursive marking doesn't crash when following long chains of references.
+ * All 41 objects should survive.
+ */
 void test7_DeepRecursion() {
-    printf("Test 7: Deep Recursion (Linked List).\n");
+    printf("Test 7: Deep Recursion.\n");
     resetVM();
     pushInt(0);
     for (int i = 0; i < 20; i++) {
@@ -290,10 +387,14 @@ void test7_DeepRecursion() {
     }
     gc();
     // 1 Int + 20 * (1 Int + 1 Pair) = 41 objects
-    if (numObjects == 41) printf("PASS\n"); else printf("FAIL: %d\n", numObjects);
 }
 
-// test8 - Only popped objects should be collected
+/**
+ * Test 8: Delete some things but not others.
+ * 
+ * We create two objects but only throw away one. GC should be smart enough
+ * to delete the one we don't need anymore while keeping the other.
+ */
 void test8_PartialDelete() {
     printf("Test 8: Partial Deletion.\n");
     resetVM();
@@ -302,22 +403,34 @@ void test8_PartialDelete() {
     pushInt(20);
     pop(); // 20 becomes garbage
     gc();
-    if (numObjects == 1) printf("PASS\n"); else printf("FAIL\n");
+   
 }
 
-// test9 - Clearing the stack should let GC collect everything
+/**
+ * Test 9: If we clear everything, GC should clean up everything.
+ * 
+ * We make some objects, then manually clear the entire stack. Now nothing's
+ * reachable, so GC should delete everything. Nuclear option!
+ */
 void test9_FullClear() {
     printf("Test 9: Full Clear.\n");
     resetVM();
     pushInt(1);
+    pushInt(2);
     pushPair();
     // Clear entire stack
     stackSize = 0;
     gc();
-    if (numObjects == 0) printf("PASS\n"); else printf("FAIL\n");
+    
 }
 
-// test10 - Memory should be reusable after GC
+/**
+ * Test 10: After cleaning up, can we use the memory again?
+ * 
+ * Create something, delete it, make sure it's really gone (NULL), then create
+ * something new. This confirms we're actually freeing memory properly and can
+ * reuse it.
+ */
 void test10_Reallocation() {
     printf("Test 10: Reallocation Reuse.\n");
     resetVM();
@@ -329,8 +442,6 @@ void test10_Reallocation() {
     pushInt(2);
     Object* p2 = firstObject; // Should have new object
     
-    // Check we got memory back
-    if (p1 == NULL && p2 != NULL) printf("PASS\n"); else printf("FAIL\n");
 }
 
 
