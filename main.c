@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <time.h>
 
 
 typedef enum {
@@ -228,17 +228,27 @@ void sweep() {
  */
 void gc() {
     int prevCount = numObjects;
-    markAll(); // Mark reachable objects
-    sweep();   // Free unreachable objects
+    
+    // Start Timer
+    clock_t start = clock();
 
-    // Grow heap limit (double current size)
+    markAll();
+    sweep();
+
+    // Stop Timer
+    clock_t end = clock();
+    double time_spent = (double)(end - start) / CLOCKS_PER_SEC;
+
     if (maxObjects == 0) maxObjects = INITIAL_GC_THRESHOLD;
     else maxObjects = numObjects * 2;
 
-    printf("GC Run: Collected %d, Remaining %d\n", prevCount - numObjects, numObjects);
+    // Only print if we actually collected something or if it took measurable time
+    // This reduces spam during the big tests
+    if (prevCount - numObjects > 0) {
+        printf("GC Run: Collected %d | Remaining %d | Time: %f sec\n", 
+               prevCount - numObjects, numObjects, time_spent);
+    }
 }
-
-
 
 /**
  * Wipes everything clean so we can start fresh.
@@ -359,15 +369,27 @@ void test5_HeapGrowth() {
  * leaking memory or getting confused.
  */
 void test6_PerformanceChurn() {
-    printf("Test 6: Performance.\n");
-    resetVM();
-    // Make and drop 1000 objects
-    for (int i = 0; i < 1000; i++) {
-        pushInt(i);
-        pop();
+    printf("Test 6: Performance & Scalability.\n");
+    
+    // test 3 different sizes to show the "linear" time increase
+    int sizes[] = {1000, 10000, 50000};
+    
+    for (int s = 0; s < 3; s++) {
+        int size = sizes[s];
+        printf(" Running stress test with %d objects\n", size);
+        
+        resetVM();
+        // Set a high threshold so GC doesn't trigger automatically during creation
+        maxObjects = size * 2; 
+        
+        for (int i = 0; i < size; i++) {
+            pushInt(i);
+            pop(); // Immediately make it garbage
+        }
+        
+        // Manual trigger to measure the full sweep of 'size' garbage objects
+        gc(); 
     }
-    gc();
-   
 }
 
 /**
