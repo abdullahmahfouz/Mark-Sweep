@@ -2,7 +2,7 @@
 
 A custom implementation of a Virtual Machine (VM) memory manager with a Mark-and-Sweep Garbage Collector. This project demonstrates low-level understanding of language runtimes, memory management lifecycles, and pointer manipulation in C.
 
-## 🚀 Key Features
+##  Key Features
 
 * **Mark-and-Sweep Algorithm**: Implements a two-phase garbage collection system:
     * **Mark Phase**: Uses recursive DFS to traverse object graphs starting from the VM stack (roots).
@@ -11,7 +11,7 @@ A custom implementation of a Virtual Machine (VM) memory manager with a Mark-and
 * **Dynamic Heap Growth**: Automatically triggers GC when the heap limit is reached and dynamically doubles heap size to accommodate growing workloads.
 * **VM Simulation**: Simulates a stack-based virtual machine with support for Integers and nested Object Pairs.
 
-## 🛠️ Technical Implementation
+##  Technical Implementation
 
 The system uses a `struct` based object model with a tagged union for type safety:
 
